@@ -107,7 +107,7 @@ canvas{display:block;border-radius:14px;touch-action:none;cursor:pointer}
     <div class="jrow"><input id="code" maxlength="4" placeholder="코드" autocomplete="off" aria-label="방 코드"><button class="btn big" id="jn">입장</button></div>
     <button class="btn ghost" id="solo">한 기기에서 둘이 하기</button>
   </div>
-  <div class="hide" id="room"><p style="margin:0">방 코드</p><div id="wcode"></div><button class="btn" id="copy">초대 링크 복사</button>
+  <div class="hide" id="room"><p style="margin:0">방 코드</p><div id="wcode"></div><button class="btn" id="copy">코드 복사</button>
     <div id="plist"></div><div id="chatSlot"></div>
     <div class="lcol"><button class="btn big prim" id="startb" disabled>게임 시작</button><button class="btn ghost" id="wback">나가기</button></div></div>
   <p id="lmsg"></p>
@@ -191,21 +191,25 @@ const localFloat=(x,y,t,c)=>playEv(['f',x,y,t,c]);
 
 /* 게임 진행 (혼자 모드 또는 방장만 실행) */
 function newGame(){
- S={gid:(S?S.gid:0)+1,b:[...Array(N)].map(()=>Array(N).fill(0)),turn:1,own:{1:0,2:0},hand:{1:[],2:[]},shield:{1:0,2:0},fog:{1:0,2:0},four:{1:false,2:false},mines:[],last:{1:null,2:null},extra:0,over:false,win:null,reroll:{1:1,2:1},pick:null,nudge:{1:0,2:0},ice:{1:0,2:0},mirror:{1:0,2:0},cat:0,timer:null,pickQ:0,check:{1:false,2:false},phys:null};
+ S={gid:(S?S.gid:0)+1,b:[...Array(N)].map(()=>Array(N).fill(0)),turn:1,own:{1:0,2:0},hand:{1:[],2:[]},shield:{1:0,2:0},fog:{1:0,2:0},four:{1:false,2:false},mines:[],last:{1:null,2:null},extra:0,over:false,win:null,reroll:{1:1,2:1},pick:null,nudge:{1:0,2:0},ice:{1:0,2:0},mirror:{1:0,2:0},cat:0,timer:null,check:{1:false,2:false},phys:null};
  MODE=null;fx=[];floats=[];fall=null;snapA=null;E(['clr']);log('대국 시작. 흑부터.');startTurn();
 }
-function startTurn(){const p=S.turn;S.own[p]++;S.extra=0;if(S.own[p]>=2&&(S.own[p]-2)%3===0)openPick(p)}
+function startTurn(){const p=S.turn;S.own[p]++;S.extra=0;if(p===1&&S.own[1]>=2&&(S.own[1]-2)%3===0)openRound()}
 function endTurn(){const p=S.turn,q=op(p);
  if(S.timer&&S.timer.p===p)S.timer=null;S.check[p]=false;
  if(S.cat>0){S.cat--;const a=[];for(let y=0;y<N;y++)for(let x=0;x<N;x++){const c=S.b[y][x];if((c===1||c===2)&&!shielded(c))a.push({x,y})}
   if(a.length){const s=a[Math.random()*a.length|0],cc=S.b[s.y][s.x];S.b[s.y][s.x]=0;boom(s.x,s.y,'#ffcf9a',16);float(s.x,s.y,'냥!','#ffcf9a');log(`고양이가 ${NAME[cc]}돌 하나를 쳐서 떨어뜨렸다`)}}
  if(S.fog[q]>0)S.fog[q]--;if(S.shield[q]>0)S.shield[q]--;S.turn=q;startTurn()}
-function openPick(p){const r=Math.random(),t=r<.55?0:r<.88?1:2;
- S.pick={p,t,ids:shuffle(Object.keys(AUG).filter(k=>AUG[k].t===t&&!(k==='four'&&S.four[p]))).slice(0,3)};snd('pick')}
-function doPick(k){const p=S.pick.p;if(!S.pick.ids.includes(k))return;S.pick=null;
+/* 증강 라운드: 흑·백이 같은 등급으로 동시에 고르고, 둘 다 끝나야 게임이 이어진다 */
+const rollIds=(p,t)=>shuffle(Object.keys(AUG).filter(k=>AUG[k].t===t&&!(k==='four'&&S.four[p]))).slice(0,3);
+function openRound(){const r=Math.random(),t=r<.55?0:r<.88?1:2;S.pick={t,ids:{1:rollIds(1,t),2:rollIds(2,t)},done:{1:false,2:false},q:{1:0,2:0}};snd('pick')}
+function doPick(p,k){const P=S.pick;if(P.done[p]||!P.ids[p].includes(k))return;
  log(`${NAME[p]}: [${AUG[k].n}] 획득`);if(AUG[k].k==='instant')instant(p,k);else S.hand[p].push(k);
- if(!S.over&&S.pickQ>0){S.pickQ--;openPick(p)}}
-function doReroll(){const p=S.pick.p;if(!S.reroll[p])return;S.reroll[p]--;openPick(p)}
+ if(!S.pick||S.over)return;
+ if(P.q[p]>0){P.q[p]--;P.ids[p]=rollIds(p,P.t)}else P.done[p]=true;
+ if(P.done[1]&&P.done[2])S.pick=null}
+function doReroll(p){const P=S.pick;if(P.done[p]||!S.reroll[p])return;S.reroll[p]--;P.ids[p]=rollIds(p,P.t)}
+const picker=()=>!S.pick?0:NET?(S.pick.done[NET.me]?0:NET.me):(S.pick.done[1]?2:1);
 function blast(cx,cy,p){let n=0;for(let y=cy-1;y<=cy+1;y++)for(let x=cx-1;x<=cx+1;x++){if(!inB(x,y))continue;const c=S.b[y][x];if(c&&!shielded(c)){S.b[y][x]=0;n++}S.mines=S.mines.filter(m=>m.x!==x||m.y!==y)}boom(cx,cy,'#ff8a3a',40);SH(14);return n}
 function addRandom(c,n){const e=shuffle(empties()).slice(0,n);e.forEach(s=>{S.b[s.y][s.x]=c;S.mines=S.mines.filter(m=>m.x!==s.x||m.y!==s.y);boom(s.x,s.y,'#fff3c4',10)});return e}
 function rmRandom(c,n){if(shielded(c))return 0;const a=[];for(let y=0;y<N;y++)for(let x=0;x<N;x++)if(S.b[y][x]===c)a.push({x,y});const r=shuffle(a).slice(0,n);r.forEach(s=>{S.b[s.y][s.x]=0;boom(s.x,s.y,'#ddd',12)});return r.length}
@@ -213,7 +217,7 @@ function instant(p,k){const q=op(p);
  if(k==='shot'){const e=addRandom(p,2);snd('stone');log(`${NAME[p]}: 돌 ${e.length}개가 하늘에서 떨어짐`)}
  if(k==='zen'){float(7,7,'…평화롭다','#cfe3ff');log(`${NAME[p]}: 명상 중. 아무 일도 없었다`)}
  if(k==='pigeon'){addRandom(3,3).forEach(s=>float(s.x,s.y,'뿌직','#eee'));log(`비둘기 떼가 판에 똥을 싸고 갔다`)}
- if(k==='gift'){const e=addRandom(q,1);if(e[0])float(e[0].x,e[0].y,'선물이야~','#ffc6dc');S.pickQ++;log(`${NAME[p]}: ${NAME[q]}에게 돌 1개를 선물했다`)}
+ if(k==='gift'){const e=addRandom(q,1);if(e[0])float(e[0].x,e[0].y,'선물이야~','#ffc6dc');if(S.pick)S.pick.q[p]++;log(`${NAME[p]}: ${NAME[q]}에게 돌 1개를 선물했다`)}
  if(k==='kibitz'){S.nudge[q]+=2;float(7,7,'"아 거기 아니지~"','#ffd27a');log(`훈수꾼 아저씨가 ${NAME[q]} 옆에 자리 잡았다`)}
  if(k==='ice'){S.ice[q]+=2;log(`${NAME[q]} 쪽 판이 꽁꽁 얼었다`)}
  if(k==='cat'){S.cat+=3;float(7,7,'냐옹','#ffcf9a');log(`고양이가 판 위에 올라왔다`)}
@@ -226,7 +230,7 @@ function instant(p,k){const q=op(p);
   if(L){const n=shuffle([[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]).map(([dx,dy])=>({x:L.x+dx,y:L.y+dy})).filter(s=>inB(s.x,s.y)&&!S.b[s.y][s.x]).slice(0,2);n.forEach(s=>{S.b[s.y][s.x]=p;boom(s.x,s.y,'#bdf',12);float(s.x,s.y,'펑','#bdf')});log(`${NAME[p]}: 분신술! ${n.length}개 복제`)}else float(7,7,'분신할 돌이 없다','#ccc')}
  if(k==='lotto'){if(Math.random()<.5){addRandom(p,4);float(7,7,'당첨!!!','#ffe066');log(`${NAME[p]}: 복권 당첨! 돌 4개`)}else{rmRandom(p,2);float(7,7,'꽝','#aaa');log(`${NAME[p]}: 복권 꽝. 돌 2개 날림`)}}
  if(k==='table'){const v=[];for(let y=0;y<N;y++)for(let x=0;x<N;x++)if(S.b[y][x]){v.push(S.b[y][x]);S.b[y][x]=0}S.mines=[];const e=shuffle(empties());v.forEach((c,i)=>S.b[e[i].y][e[i].x]=c);S.last={1:null,2:null};SH(18);FL(.6);snd('boom');float(7,7,'(╯°□°)╯︵ ┻━┻','#fff');log(`${NAME[p]}: 밥상을 뒤엎었다!!`)}
- if(k==='gamble'){S.pickQ+=2;log(`${NAME[p]}: 한 번만 더… 한 번만 더…`)}
+ if(k==='gamble'){if(S.pick)S.pick.q[p]+=2;log(`${NAME[p]}: 한 번만 더… 한 번만 더…`)}
  if(k==='mirror'){S.mirror[p]+=3;log(`${NAME[p]}: 따라쟁이 모드`)}
  if(k==='brawl'){const a=[];for(let y=0;y<N;y++)for(let x=0;x<N;x++){const c=S.b[y][x];if((c===1||c===2)&&!shielded(c))a.push({x,y})}
   const kicks=shuffle(a).slice(0,6).map(s=>{const an=Math.random()*6.283,v=.3+Math.random()*.25;return{x:s.x,y:s.y,vx:Math.cos(an)*v,vy:Math.sin(an)*v}});
@@ -317,7 +321,7 @@ function act(m,from){
  if(isGuest()){if(NET.connected)NET.send({t:'act',m});return}
  if(m.a==='restart'){if(!NET||S.over||isHost()&&from===NET.me){newGame();commit()}return}
  if(!S||S.over)return;
- if(m.a==='pick'||m.a==='reroll'){if(!S.pick||S.pick.p!==from)return;m.a==='pick'?doPick(m.k):doReroll();return commit()}
+ if(m.a==='pick'||m.a==='reroll'){if(!S.pick||S.phys||S.pick.done[from])return;m.a==='pick'?doPick(from,m.k):doReroll(from);return commit()}
  if(from!==S.turn||S.pick||S.phys)return;const p=from;
  if(m.a==='place')place(m.x,m.y);
  if(m.a==='card')useActive(p,m.i);
@@ -339,15 +343,15 @@ function ui(){if(!S)return;
   $('h'+p).innerHTML=S.hand[p].length?S.hand[p].map((k,i)=>{const a=AUG[k];return `<button class="hc t${a.t}${MODE&&S.turn===p&&MODE.i===i?' sel':''}" data-p="${p}" data-i="${i}" ${off_?'disabled':''}><i class="hj">${a.j}</i><span>${a.n}<small>${a.d}</small></span></button>`}).join(''):'<div class="empty">보관 중인 증강 없음</div>'}
  const p=S.turn,me=mine(p);let s;
  if(S.over)s=S.win.w?(NET?(S.win.w===NET.me?'<em>승리!</em>':'패배…'):`<em>${NAME[S.win.w]}</em> 승리`):'무승부';
- else if(S.pick)s=mine(S.pick.p)?`<em>${who(S.pick.p)}</em> 증강 고르는 중`:`<em>상대</em>가 증강 고르는 중…`;
+ else if(S.pick)s=NET?(S.pick.done[NET.me]?'<em>상대</em>가 증강 고르는 중… 다 고르면 이어서 진행':'<em>증강</em> 고르는 중'):`<em>${NAME[picker()]}</em> 증강 고르는 중`;
  else if(MODE)s=`<em>${AUG[MODE.k].n}</em>: ${MODE.k==='flick'?'내 돌을 잡고 뒤로 당겼다 놓으세요':TWO.includes(MODE.k)?(MODE.from?'어디로 갈까요?':'움직일 내 돌을 고르세요'):'사용할 곳을 고르세요'} (카드를 다시 누르면 취소)`;
  else s=NET?(me?`<em>내 차례</em> (${NAME[p]})${S.extra?' · 한 수 더':''}`:`상대 차례 (${NAME[p]})`):`<em>${NAME[p]}</em> 차례${S.extra?' · 한 수 더':''}`;
  $('status').innerHTML=s;
- const pk=S.pick&&mine(S.pick.p)?S.pick:null,key=pk?JSON.stringify(pk)+S.reroll[pk.p]+S.gid:'';
+ const pp=picker(),pk=pp?S.pick:null,key=pk?pp+JSON.stringify(pk.ids[pp])+S.reroll[pp]+S.gid:'';
  if(key!==pickKey){pickKey=key;pickSent=false;if(pk){
-  $('pt').textContent=NET?'증강 선택':`${NAME[pk.p]}의 증강 선택`;$('pp').textContent=`${TIER[pk.t]} 등급`;
-  $('pc').innerHTML=pk.ids.map(k=>{const a=AUG[k];return `<button class="card t${a.t}" data-k="${k}"><i class="hj t${a.t}">${a.j}</i><div><b>${a.n}</b><span>${a.d}</span></div></button>`}).join('');
-  $('rr').textContent=`다시 뽑기 (${S.reroll[pk.p]})`;$('rr').disabled=!S.reroll[pk.p]}}
+  $('pt').textContent=NET?'증강 선택':`${NAME[pp]}의 증강 선택`;$('pp').textContent=`${TIER[pk.t]} 등급`;
+  $('pc').innerHTML=pk.ids[pp].map(k=>{const a=AUG[k];return `<button class="card t${a.t}" data-k="${k}"><i class="hj t${a.t}">${a.j}</i><div><b>${a.n}</b><span>${a.d}</span></div></button>`}).join('');
+  $('rr').textContent=`다시 뽑기 (${S.reroll[pp]})`;$('rr').disabled=!S.reroll[pp]}}
  $('ov').classList.toggle('hide',!pk);
  if(S.over&&!winShown){winShown=true;const w=S.win;setTimeout(()=>{if(!S.over)return;
   $('wt').textContent=w.w?(NET?(w.w===NET.me?'승리!':'패배…'):`${NAME[w.w]} 승리!`):'무승부';
@@ -356,8 +360,8 @@ function ui(){if(!S)return;
  $('restart').classList.toggle('hide',!!NET);$('leave').classList.toggle('hide',!NET);
 }
 
-$('pc').addEventListener('click',e=>{const c=e.target.closest('.card');if(!c||!S.pick||pickSent)return;pickSent=isGuest();act({a:'pick',k:c.dataset.k},S.pick.p)});
-$('rr').addEventListener('click',()=>{if(S.pick&&!pickSent){pickSent=isGuest();act({a:'reroll'},S.pick.p)}});
+$('pc').addEventListener('click',e=>{const c=e.target.closest('.card');if(!c||!picker()||pickSent||S.phys)return;pickSent=isGuest();act({a:'pick',k:c.dataset.k},picker())});
+$('rr').addEventListener('click',()=>{if(picker()&&!pickSent&&!S.phys){pickSent=isGuest();act({a:'reroll'},picker())}});
 document.querySelector('main').addEventListener('click',e=>{const b=e.target.closest('.hc');if(!b||b.disabled)return;const p=+b.dataset.p,i=+b.dataset.i;
  if(!canAct()||p!==S.turn||S.check[p])return;const k=S.hand[p][i];
  if(MODE&&MODE.i===i){MODE=null;return ui()}
@@ -448,7 +452,7 @@ $('jn').onclick=()=>joinRoom($('code').value);
 $('code').addEventListener('keydown',e=>{if(e.key==='Enter')joinRoom($('code').value)});
 $('solo').onclick=()=>{NET=null;$('lobby').classList.add('hide');placeChat(false);newGame();commit()};
 $('startb').onclick=startOnline;
-$('copy').onclick=async()=>{const u=location.href.split('#')[0]+'#'+NET.code;try{await navigator.clipboard.writeText(u);$('copy').textContent='복사됨!'}catch(_){$('copy').textContent=u}};
+$('copy').onclick=async()=>{try{await navigator.clipboard.writeText(NET.code);$('copy').textContent='복사됨!'}catch(_){$('copy').textContent='직접 적어 주세요: '+NET.code}setTimeout(()=>$('copy').textContent='코드 복사',1500)};
 $('cf').addEventListener('submit',e=>{e.preventDefault();const t=$('ci').value.trim().slice(0,120);if(!t||!NET||!NET.connected)return;NET.send({t:'chat',txt:t});chatLine(NET.names[NET.me]||'나',t,true);$('ci').value=''});
 const back=()=>{location.hash='';location.reload()};
 $('leave').onclick=back;$('gback').onclick=back;$('wback').onclick=back;
