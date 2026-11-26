@@ -84,6 +84,15 @@ canvas{display:block;border-radius:14px;touch-action:none;cursor:pointer}
 #wcode{font:400 clamp(56px,14vw,84px)/1 "Black Han Sans",sans-serif;letter-spacing:10px;color:var(--acc);margin:6px 0 10px}
 #lmsg{min-height:22px;margin:14px 0 0;color:var(--mut);font-size:14px}
 .hbtns{display:flex;gap:8px}
+.gotw{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
+.goth{font-size:12px;color:var(--mut);margin-bottom:6px}
+.got{display:flex;flex-wrap:wrap;gap:5px}
+.gc{display:inline-flex;align-items:center;gap:5px;background:#2f261f;border:1px solid #4a3c30;border-radius:999px;padding:2px 9px 2px 3px;color:var(--ink);font:500 12px "Noto Sans KR",sans-serif;cursor:pointer;min-height:28px}
+.gc .hj{width:22px;height:22px;font-size:13px;border-radius:50%}
+.gc.on{border-color:var(--acc)}.gc:focus-visible{outline:2px solid var(--acc)}
+.gc.t1{border-color:#8a6a24}.gc.t2{border-color:#8a5fa8}
+.gd{font-size:12px;color:#d8cbb9;line-height:1.4;margin-top:6px;min-height:0}
+.got:empty::before{content:'아직 없음';color:var(--mut);font-size:12px}
 .eye{font:700 12px "Noto Sans KR",sans-serif;font-style:normal;background:#443629;border-radius:6px;padding:3px 6px;color:var(--acc)}.prow.spec{border-style:dotted}
 @media(max-width:1000px){main{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.boardbox{grid-column:1/-1;justify-self:center;grid-row:2}}
 @media(max-width:600px){.pc{grid-template-columns:minmax(0,1fr)}.card{flex-direction:row;text-align:left;padding:12px}.card .hj{width:52px;height:52px;font-size:30px}.card div{display:flex;flex-direction:column}.pl{padding:10px}.hc small{display:none}}
@@ -92,9 +101,9 @@ canvas{display:block;border-radius:14px;touch-action:none;cursor:pointer}
 <header><h1>증강 <b>오목</b></h1><div class="hbtns"><button class="btn" id="restart">새 판</button><span class="bd hide" id="specs" style="align-self:center"></span><button class="btn hide" id="leave">나가기</button></div></header>
 <div id="status"></div>
 <main>
-  <section class="pl" id="p1"><h2><i class="st k"></i><span id="n1">흑</span></h2><div class="badges" id="bd1"></div><div class="hand" id="h1"></div></section>
+  <section class="pl" id="p1"><h2><i class="st k"></i><span id="n1">흑</span></h2><div class="badges" id="bd1"></div><div class="hand" id="h1"></div><div class="gotw"><div class="goth">먹은 증강</div><div class="got" id="g1"></div><div class="gd" id="gd1"></div></div></section>
   <div class="boardbox"><canvas id="cv"></canvas></div>
-  <section class="pl" id="p2"><h2><i class="st w"></i><span id="n2">백</span></h2><div class="badges" id="bd2"></div><div class="hand" id="h2"></div></section>
+  <section class="pl" id="p2"><h2><i class="st w"></i><span id="n2">백</span></h2><div class="badges" id="bd2"></div><div class="hand" id="h2"></div><div class="gotw"><div class="goth">먹은 증강</div><div class="got" id="g2"></div><div class="gd" id="gd2"></div></div></section>
   <div id="chatHome" class="hide"><div id="chat"><div id="msgs"></div><form id="cf"><input id="ci" maxlength="120" placeholder="메시지 입력" autocomplete="off" aria-label="채팅"><button class="btn">전송</button></form></div></div>
 </main>
 <div class="ov hide" id="ov"><div class="pick"><h3 id="pt"></h3><p id="pp"></p><div class="pc" id="pc"></div><button class="btn" id="rr"></button></div></div>
@@ -192,7 +201,7 @@ const localFloat=(x,y,t,c)=>playEv(['f',x,y,t,c]);
 
 /* 게임 진행 (혼자 모드 또는 방장만 실행) */
 function newGame(){
- S={gid:(S?S.gid:0)+1,b:[...Array(N)].map(()=>Array(N).fill(0)),turn:1,own:{1:0,2:0},hand:{1:[],2:[]},shield:{1:0,2:0},fog:{1:0,2:0},four:{1:false,2:false},mines:[],last:{1:null,2:null},extra:0,over:false,win:null,reroll:{1:1,2:1},pick:null,nudge:{1:0,2:0},ice:{1:0,2:0},mirror:{1:0,2:0},cat:0,timer:null,check:{1:false,2:false},phys:null};
+ S={gid:(S?S.gid:0)+1,b:[...Array(N)].map(()=>Array(N).fill(0)),turn:1,own:{1:0,2:0},hand:{1:[],2:[]},got:{1:[],2:[]},shield:{1:0,2:0},fog:{1:0,2:0},four:{1:false,2:false},mines:[],last:{1:null,2:null},extra:0,over:false,win:null,reroll:{1:1,2:1},pick:null,nudge:{1:0,2:0},ice:{1:0,2:0},mirror:{1:0,2:0},cat:0,timer:null,check:{1:false,2:false},phys:null};
  MODE=null;fx=[];floats=[];fall=null;snapA=null;E(['clr']);log('대국 시작. 흑부터.');startTurn();
 }
 function startTurn(){const p=S.turn;S.own[p]++;S.extra=0;if(p===1&&S.own[1]>=2&&(S.own[1]-2)%3===0)openRound()}
@@ -205,7 +214,7 @@ function endTurn(){const p=S.turn,q=op(p);
 const rollIds=(p,t)=>shuffle(Object.keys(AUG).filter(k=>AUG[k].t===t&&!(k==='four'&&S.four[p]))).slice(0,3);
 function openRound(){const r=Math.random(),t=r<.55?0:r<.88?1:2;S.pick={t,ids:{1:rollIds(1,t),2:rollIds(2,t)},done:{1:false,2:false},q:{1:0,2:0}};snd('pick')}
 function doPick(p,k){const P=S.pick;if(P.done[p]||!P.ids[p].includes(k))return;
- log(`${NAME[p]}: [${AUG[k].n}] 획득`);if(AUG[k].k==='instant')instant(p,k);else S.hand[p].push(k);
+ (S.got||(S.got={1:[],2:[]}))[p].push(k);log(`${NAME[p]}: [${AUG[k].n}] 획득`);if(AUG[k].k==='instant')instant(p,k);else S.hand[p].push(k);
  if(!S.pick||S.over)return;
  if(P.q[p]>0){P.q[p]--;P.ids[p]=rollIds(p,P.t)}else P.done[p]=true;
  if(P.done[1]&&P.done[2])S.pick=null}
@@ -340,6 +349,7 @@ function ui(){if(!S)return;
   const b=[];if(S.four[p])b.push('사목');if(S.shield[p])b.push(`방패 ${S.shield[p]}`);if(S.fog[p])b.push(`안개 ${S.fog[p]}`);
   const nm=S.mines.filter(m=>m.o===p).length;if(nm&&(!NET||p===NET.me))b.push(`지뢰 ${nm}`);
   if(S.nudge[p])b.push(`훈수 ${S.nudge[p]}`);if(S.ice[p])b.push(`빙판 ${S.ice[p]}`);if(S.mirror[p])b.push(`따라쟁이 ${S.mirror[p]}`);if(S.timer&&S.timer.p===p)b.push('초읽기');if(S.cat)b.push(`고양이 ${S.cat}`);if(S.check[p])b.push('장군');
+  const gl=(S.got&&S.got[p])||[],gk=gl.join();if($('g'+p).dataset.k!==gk+S.gid){$('g'+p).dataset.k=gk+S.gid;$('g'+p).innerHTML=gl.map(k=>{const a=AUG[k];return `<button class="gc t${a.t}" data-k="${k}" data-p="${p}" title="${a.n}: ${a.d}"><i class="hj t${a.t}">${a.j}</i>${a.n}</button>`}).join('');$('gd'+p).textContent=''}
   $('bd'+p).innerHTML=b.map(t=>`<span class="bd">${t}</span>`).join('');
   const off_=S.turn!==p||!mine(p)||S.over||S.check[p]||S.pick||S.phys;
   $('h'+p).innerHTML=S.hand[p].length?S.hand[p].map((k,i)=>{const a=AUG[k];return `<button class="hc t${a.t}${MODE&&S.turn===p&&MODE.i===i?' sel':''}" data-p="${p}" data-i="${i}" ${off_?'disabled':''}><i class="hj">${a.j}</i><span>${a.n}<small>${a.d}</small></span></button>`}).join(''):'<div class="empty">보관 중인 증강 없음</div>'}
@@ -365,7 +375,9 @@ function ui(){if(!S)return;
 
 $('pc').addEventListener('click',e=>{const c=e.target.closest('.card');if(!c||!picker()||pickSent||S.phys)return;pickSent=isGuest();act({a:'pick',k:c.dataset.k},picker())});
 $('rr').addEventListener('click',()=>{if(picker()&&!pickSent&&!S.phys){pickSent=isGuest();act({a:'reroll'},picker())}});
-document.querySelector('main').addEventListener('click',e=>{const b=e.target.closest('.hc');if(!b||b.disabled)return;const p=+b.dataset.p,i=+b.dataset.i;
+document.querySelector('main').addEventListener('click',e=>{const g=e.target.closest('.gc');if(g){const a=AUG[g.dataset.k],box=$('gd'+g.dataset.p),on=g.classList.contains('on');
+ g.parentNode.querySelectorAll('.gc').forEach(x=>x.classList.remove('on'));box.textContent=on?'':`${a.n} (${TIER[a.t]}): ${a.d}`;if(!on)g.classList.add('on');return}
+ const b=e.target.closest('.hc');if(!b||b.disabled)return;const p=+b.dataset.p,i=+b.dataset.i;
  if(!canAct()||p!==S.turn||S.check[p])return;const k=S.hand[p][i];
  if(MODE&&MODE.i===i){MODE=null;return ui()}
  if(AUG[k].k==='target'){MODE={k,i};return ui()}
