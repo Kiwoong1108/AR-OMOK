@@ -43,7 +43,7 @@ main{max-width:1180px;margin:0 auto;padding:0 12px 24px;display:grid;grid-templa
 .hc small{display:block;color:var(--mut);font-size:12px;line-height:1.35}
 .boardbox{position:relative;border-radius:14px;box-shadow:0 18px 50px #000a,0 0 0 1px #00000060}
 canvas{display:block;border-radius:14px;touch-action:none;cursor:pointer}
-#chatHome{grid-column:1/-1;max-width:720px;width:100%;justify-self:center}
+#chatHome{width:100%}#chatHome #msgs{height:170px}
 #chat{background:#1e1814;border:1px solid var(--line);border-radius:12px;padding:8px;text-align:left}
 #msgs{height:112px;overflow:auto;font-size:14px;padding:2px 4px 6px;display:flex;flex-direction:column;gap:2px}
 #msgs div{overflow-wrap:anywhere}#msgs b{color:var(--acc);margin-right:6px;font-weight:700}#msgs .me b{color:#9ad8ff}#msgs .sys{color:var(--mut);font-size:13px}
@@ -94,16 +94,22 @@ canvas{display:block;border-radius:14px;touch-action:none;cursor:pointer}
 .gd{font-size:12px;color:#d8cbb9;line-height:1.4;margin-top:6px;min-height:0}
 .got:empty::before{content:'아직 없음';color:var(--mut);font-size:12px}
 .eye{font:700 12px "Noto Sans KR",sans-serif;font-style:normal;background:#443629;border-radius:6px;padding:3px 6px;color:var(--acc)}.prow.spec{border-style:dotted}
-@media(max-width:1000px){main{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.boardbox{grid-column:1/-1;justify-self:center;grid-row:2}}
+/* 넓은 화면: 흑 | 판 | 백+채팅, 한 화면에 다 들어오게 */
+main{grid-template-rows:auto minmax(0,1fr)}#p1{grid-column:1;grid-row:1/span 2}#p2{grid-column:3;grid-row:1}.boardbox{grid-column:2;grid-row:1/span 2}#chatHome{grid-column:3;grid-row:2;align-self:start}
+.pl{position:relative}
+.bub{position:absolute;left:10px;right:10px;top:46px;z-index:3;background:#fff8ea;color:#2a1a08;border-radius:12px;padding:7px 11px;font:500 14px/1.35 "Noto Sans KR",sans-serif;box-shadow:0 8px 20px #0009;opacity:0;transform:translateY(-6px) scale(.96);transition:opacity .18s,transform .18s;pointer-events:none;overflow-wrap:anywhere}
+.bub::before{content:'';position:absolute;top:-7px;left:20px;border:7px solid transparent;border-top:0;border-bottom-color:#fff8ea}
+.bub.show{opacity:1;transform:none}
+@media(max-width:1000px){main{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:none}#p1,#p2{grid-row:1}#p2{grid-column:2}.boardbox{grid-column:1/-1;justify-self:center;grid-row:2}#chatHome{grid-column:1/-1;grid-row:3}#chatHome #msgs{height:48px}}
 @media(max-width:600px){.pc{grid-template-columns:minmax(0,1fr)}.card{flex-direction:row;text-align:left;padding:12px}.card .hj{width:52px;height:52px;font-size:30px}.card div{display:flex;flex-direction:column}.pl{padding:10px}.hc small{display:none}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style></head><body>
 <header><h1>증강 <b>오목</b></h1><div class="hbtns"><button class="btn" id="restart">새 판</button><span class="bd hide" id="specs" style="align-self:center"></span><button class="btn hide" id="leave">나가기</button></div></header>
 <div id="status"></div>
 <main>
-  <section class="pl" id="p1"><h2><i class="st k"></i><span id="n1">흑</span></h2><div class="badges" id="bd1"></div><div class="hand" id="h1"></div><div class="gotw"><div class="goth">먹은 증강</div><div class="got" id="g1"></div><div class="gd" id="gd1"></div></div></section>
+  <section class="pl" id="p1"><div class="bub" id="bub1"></div><h2><i class="st k"></i><span id="n1">흑</span></h2><div class="badges" id="bd1"></div><div class="hand" id="h1"></div><div class="gotw"><div class="goth">먹은 증강</div><div class="got" id="g1"></div><div class="gd" id="gd1"></div></div></section>
   <div class="boardbox"><canvas id="cv"></canvas></div>
-  <section class="pl" id="p2"><h2><i class="st w"></i><span id="n2">백</span></h2><div class="badges" id="bd2"></div><div class="hand" id="h2"></div><div class="gotw"><div class="goth">먹은 증강</div><div class="got" id="g2"></div><div class="gd" id="gd2"></div></div></section>
+  <section class="pl" id="p2"><div class="bub" id="bub2"></div><h2><i class="st w"></i><span id="n2">백</span></h2><div class="badges" id="bd2"></div><div class="hand" id="h2"></div><div class="gotw"><div class="goth">먹은 증강</div><div class="got" id="g2"></div><div class="gd" id="gd2"></div></div></section>
   <div id="chatHome" class="hide"><div id="chat"><div id="msgs"></div><form id="cf"><input id="ci" maxlength="120" placeholder="메시지 입력" autocomplete="off" aria-label="채팅"><button class="btn">전송</button></form></div></div>
 </main>
 <div class="ov hide" id="ov"><div class="pick"><h3 id="pt"></h3><p id="pp"></p><div class="pc" id="pc"></div><button class="btn" id="rr"></button></div></div>
@@ -415,7 +421,8 @@ function getName(){myName=($('nick').value.trim()||myName).slice(0,10);try{local
 function mkCode(){const A='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let s='';for(let i=0;i<4;i++)s+=A[Math.random()*A.length|0];return s}
 function lmsg(t){$('lmsg').textContent=t}
 const esc=t=>String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function chatLine(name,txt,mine_){const d=document.createElement('div');if(name===null){d.className='sys';d.textContent=txt}else{d.className=mine_?'me':'';const b=document.createElement('b');b.textContent=name;d.append(b,document.createTextNode(txt))}
+const bubT={};function bubble(p,txt){if(p!==1&&p!==2)return;const b=$('bub'+p);b.textContent=txt;b.classList.add('show');clearTimeout(bubT[p]);bubT[p]=setTimeout(()=>b.classList.remove('show'),4000)}
+function chatLine(name,txt,mine_,p){bubble(p,txt);const d=document.createElement('div');if(name===null){d.className='sys';d.textContent=txt}else{d.className=mine_?'me':'';const b=document.createElement('b');b.textContent=name;d.append(b,document.createTextNode(txt))}
  $('msgs').append(d);while($('msgs').children.length>80)$('msgs').firstChild.remove();$('msgs').scrollTop=1e9}
 const sys=t=>chatLine(null,t);
 function placeChat(inRoom){(inRoom?$('chatSlot'):$('chatHome')).appendChild($('chat'));$('chatHome').classList.toggle('hide',!NET)}
@@ -441,13 +448,13 @@ function startOnline(){if(!isHost()||!NET.names[2])return;NET.started=true;$('lo
 function onMsg(m,pe){
  if(isHost()){if(!pe)return;
   if(m.t==='act'&&pe.role==='player')act(m.m,2);
-  else if(m.t==='chat'){const txt=String(m.txt).slice(0,120);chatLine(pe.name,txt,false);hostBroadcast({t:'chat',name:pe.name,txt},pe)}
+  else if(m.t==='chat'){const txt=String(m.txt).slice(0,120);const cp=pe.role==='player'?2:0;chatLine(pe.name,txt,false,cp);hostBroadcast({t:'chat',name:pe.name,txt,p:cp},pe)}
   else if(m.t==='bye')dropPeer(pe);return}
  if(m.t==='st'){const ng=!S||S.gid!==m.S.gid;S=m.S;if(ng){fx=[];floats=[];MODE=null}m.ev.forEach(playEv);
   if(S.timer&&S.timer.left!=null&&S.timer.dl)TDL=performance.now()+S.timer.left;if(!NET.started){NET.started=true;$('lobby').classList.add('hide');placeChat(false)}ui()}
  else if(m.t==='ph'&&S){S.phys=S.phys||{};S.phys.B=m.B.map(([x,y,c])=>({x,y,c}));m.ev.forEach(playEv)}
  else if(m.t==='room'){const first=!NET.connected;NET.connected=true;NET.names=m.names;NET.specs=m.specs;NET.me=m.role==='player'?2:0;if(!m.started){if(first||!$('room').classList.contains('hide'))showRoom()}else ui()}
- else if(m.t==='chat')chatLine(m.name,String(m.txt).slice(0,120),false);
+ else if(m.t==='chat')chatLine(m.name,String(m.txt).slice(0,120),false,m.p);
  else if(m.t==='sys')sys(m.txt);
  else if(m.t==='end'){NET.gone=true;$('lt').textContent=m.txt;$('gone').classList.remove('hide')}
  else if(m.t==='full'){lmsg('방에 들어갈 수 없어요.');$('jn').disabled=$('mk').disabled=false}}
@@ -493,7 +500,7 @@ $('code').addEventListener('keydown',e=>{if(e.key==='Enter')joinRoom($('code').v
 $('solo').onclick=()=>{NET=null;$('lobby').classList.add('hide');placeChat(false);newGame();commit()};
 $('startb').onclick=startOnline;
 $('copy').onclick=async()=>{try{await navigator.clipboard.writeText(NET.code);$('copy').textContent='복사됨!'}catch(_){$('copy').textContent='직접 적어 주세요: '+NET.code}setTimeout(()=>$('copy').textContent='코드 복사',1500)};
-$('cf').addEventListener('submit',e=>{e.preventDefault();const t=$('ci').value.trim().slice(0,120);if(!t||!NET||!NET.connected)return;NET.send({t:'chat',name:myName,txt:t});chatLine(myName,t,true);$('ci').value=''});
+$('cf').addEventListener('submit',e=>{e.preventDefault();const t=$('ci').value.trim().slice(0,120);if(!t||!NET||!NET.connected)return;NET.send({t:'chat',name:myName,txt:t,p:NET.me});chatLine(myName,t,true,NET.me);$('ci').value=''});
 const back=()=>{location.hash='';location.reload()};
 $('leave').onclick=back;$('gback').onclick=back;$('wback').onclick=back;
 
