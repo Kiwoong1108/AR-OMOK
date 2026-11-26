@@ -84,11 +84,12 @@ canvas{display:block;border-radius:14px;touch-action:none;cursor:pointer}
 #wcode{font:400 clamp(56px,14vw,84px)/1 "Black Han Sans",sans-serif;letter-spacing:10px;color:var(--acc);margin:6px 0 10px}
 #lmsg{min-height:22px;margin:14px 0 0;color:var(--mut);font-size:14px}
 .hbtns{display:flex;gap:8px}
+.eye{font:700 12px "Noto Sans KR",sans-serif;font-style:normal;background:#443629;border-radius:6px;padding:3px 6px;color:var(--acc)}.prow.spec{border-style:dotted}
 @media(max-width:1000px){main{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.boardbox{grid-column:1/-1;justify-self:center;grid-row:2}}
 @media(max-width:600px){.pc{grid-template-columns:minmax(0,1fr)}.card{flex-direction:row;text-align:left;padding:12px}.card .hj{width:52px;height:52px;font-size:30px}.card div{display:flex;flex-direction:column}.pl{padding:10px}.hc small{display:none}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style></head><body>
-<header><h1>증강 <b>오목</b></h1><div class="hbtns"><button class="btn" id="restart">새 판</button><button class="btn hide" id="leave">나가기</button></div></header>
+<header><h1>증강 <b>오목</b></h1><div class="hbtns"><button class="btn" id="restart">새 판</button><span class="bd hide" id="specs" style="align-self:center"></span><button class="btn hide" id="leave">나가기</button></div></header>
 <div id="status"></div>
 <main>
   <section class="pl" id="p1"><h2><i class="st k"></i><span id="n1">흑</span></h2><div class="badges" id="bd1"></div><div class="hand" id="h1"></div></section>
@@ -162,13 +163,13 @@ let S,size=600,cs,off,hover=null,fx=[],floats=[],shake=0,fall=null,flash=0,snapA
 let NET=null,MODE=null,DRAG=null,TDL=0,EV=[],winShown=false,pickKey='',pickSent=false;
 const ID=Math.random().toString(36).slice(2,10);
 const op=p=>3-p, inB=(x,y)=>x>=0&&y>=0&&x<N&&y<N;
-const isGuest=()=>!!NET&&NET.role==='guest', isHost=()=>!!NET&&NET.role==='host';
+const isGuest=()=>!!NET&&NET.role!=='host', isHost=()=>!!NET&&NET.role==='host', isSpec=()=>!!NET&&NET.me===0;
 const VIEW=()=>NET?NET.me:S.turn;
 const mine=p=>!NET||NET.me===p;
 const canAct=()=>S&&!S.over&&!S.pick&&!S.phys&&!fall&&mine(S.turn);
 const shielded=c=>(c===1||c===2)&&S.shield[c]>0;
 const hiddenTo=(c,v)=>(c===1||c===2)&&!S.over&&c!==v&&S.fog[c]>0;
-const hidden=c=>hiddenTo(c,VIEW());
+const hidden=c=>!isSpec()&&hiddenTo(c,VIEW());
 const empties=()=>{const a=[];for(let y=0;y<N;y++)for(let x=0;x<N;x++)if(!S.b[y][x])a.push({x,y});return a};
 const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a};
 
@@ -318,7 +319,7 @@ function finish(w,cells,irony){S.over=true;S.win={w,cells,irony};S.pick=null;ret
 
 /* 입력은 전부 act()를 거친다: 손님이면 방장에게 보내고, 방장이나 혼자 모드면 바로 실행 */
 function act(m,from){
- if(isGuest()){if(NET.connected)NET.send({t:'act',m});return}
+ if(isGuest()){if(NET.connected&&NET.me)NET.send({t:'act',m});return}
  if(m.a==='restart'){if(!NET||S.over||isHost()&&from===NET.me){newGame();commit()}return}
  if(!S||S.over)return;
  if(m.a==='pick'||m.a==='reroll'){if(!S.pick||S.phys||S.pick.done[from])return;m.a==='pick'?doPick(from,m.k):doReroll(from);return commit()}
@@ -329,9 +330,10 @@ function act(m,from){
  if(m.a==='move')doMove(p,m.i,m.fx,m.fy,m.x,m.y);
  if(m.a==='flick')doFlick(p,m.i,m.x,m.y,m.vx,m.vy);
  commit()}
-function commit(){ui();if(isHost()&&NET.connected){if(S.timer&&S.timer.dl)S.timer.left=S.timer.dl-performance.now();NET.send({t:'st',S,ev:EV})}EV=[]}
+function commit(){ui();if(isHost()&&NET.peers.length){if(S.timer&&S.timer.dl)S.timer.left=S.timer.dl-performance.now();NET.send({t:'st',S,ev:EV})}EV=[]}
 
-function who(p){return NET?(p===NET.me?'나':(NET.names[p]||'상대')):NAME[p]}
+function who(p){return NET?(p===NET.me?'나':(NET.names[p]||NAME[p])):NAME[p]}
+function winText(w){return !NET?`${NAME[w]} 승리!`:isSpec()?`${NET.names[w]||NAME[w]} (${NAME[w]}) 승리!`:w===NET.me?'승리!':'패배…'}
 function ui(){if(!S)return;
  if(MODE&&(S.over||S.pick||S.phys||!mine(S.turn)||S.hand[S.turn][MODE.i]!==MODE.k))MODE=null;
  for(const p of[1,2]){$('p'+p).classList.toggle('on',S.turn===p&&!S.over);$('n'+p).textContent=NET?`${NAME[p]} · ${NET.names[p]||''}${p===NET.me?' (나)':''}`:NAME[p];
@@ -342,10 +344,10 @@ function ui(){if(!S)return;
   const off_=S.turn!==p||!mine(p)||S.over||S.check[p]||S.pick||S.phys;
   $('h'+p).innerHTML=S.hand[p].length?S.hand[p].map((k,i)=>{const a=AUG[k];return `<button class="hc t${a.t}${MODE&&S.turn===p&&MODE.i===i?' sel':''}" data-p="${p}" data-i="${i}" ${off_?'disabled':''}><i class="hj">${a.j}</i><span>${a.n}<small>${a.d}</small></span></button>`}).join(''):'<div class="empty">보관 중인 증강 없음</div>'}
  const p=S.turn,me=mine(p);let s;
- if(S.over)s=S.win.w?(NET?(S.win.w===NET.me?'<em>승리!</em>':'패배…'):`<em>${NAME[S.win.w]}</em> 승리`):'무승부';
- else if(S.pick)s=NET?(S.pick.done[NET.me]?'<em>상대</em>가 증강 고르는 중… 다 고르면 이어서 진행':'<em>증강</em> 고르는 중'):`<em>${NAME[picker()]}</em> 증강 고르는 중`;
+ if(S.over)s=S.win.w?`<em>${esc(winText(S.win.w))}</em>`:'무승부';
+ else if(S.pick)s=isSpec()?'두 사람이 증강 고르는 중…':NET?(S.pick.done[NET.me]?'<em>상대</em>가 증강 고르는 중… 다 고르면 이어서 진행':'<em>증강</em> 고르는 중'):`<em>${NAME[picker()]}</em> 증강 고르는 중`;
  else if(MODE)s=`<em>${AUG[MODE.k].n}</em>: ${MODE.k==='flick'?'내 돌을 잡고 뒤로 당겼다 놓으세요':TWO.includes(MODE.k)?(MODE.from?'어디로 갈까요?':'움직일 내 돌을 고르세요'):'사용할 곳을 고르세요'} (카드를 다시 누르면 취소)`;
- else s=NET?(me?`<em>내 차례</em> (${NAME[p]})${S.extra?' · 한 수 더':''}`:`상대 차례 (${NAME[p]})`):`<em>${NAME[p]}</em> 차례${S.extra?' · 한 수 더':''}`;
+ else s=isSpec()?`<em>${esc(NET.names[p]||'')}</em> 차례 (${NAME[p]}) · 관전 중`:NET?(me?`<em>내 차례</em> (${NAME[p]})${S.extra?' · 한 수 더':''}`:`상대 차례 (${NAME[p]})`):`<em>${NAME[p]}</em> 차례${S.extra?' · 한 수 더':''}`;
  $('status').innerHTML=s;
  const pp=picker(),pk=pp?S.pick:null,key=pk?pp+JSON.stringify(pk.ids[pp])+S.reroll[pp]+S.gid:'';
  if(key!==pickKey){pickKey=key;pickSent=false;if(pk){
@@ -354,10 +356,11 @@ function ui(){if(!S)return;
   $('rr').textContent=`다시 뽑기 (${S.reroll[pp]})`;$('rr').disabled=!S.reroll[pp]}}
  $('ov').classList.toggle('hide',!pk);
  if(S.over&&!winShown){winShown=true;const w=S.win;setTimeout(()=>{if(!S.over)return;
-  $('wt').textContent=w.w?(NET?(w.w===NET.me?'승리!':'패배…'):`${NAME[w.w]} 승리!`):'무승부';
+  $('wt').textContent=w.w?winText(w.w):'무승부';
   $('wp').textContent=w.irony?`${who(op(w.w))}가 판을 흔들다가 오목을 만들어 줬다`:w.w?`${w.cells.length}목 완성`:'판이 꽉 찼다';$('wo').classList.remove('hide')},900)}
  if(!S.over){winShown=false;$('wo').classList.add('hide')}
- $('restart').classList.toggle('hide',!!NET);$('leave').classList.toggle('hide',!NET);
+ $('restart').classList.toggle('hide',!!NET);$('again').classList.toggle('hide',isSpec());
+ const ns=NET&&NET.specs?NET.specs.length:0;$('specs').classList.toggle('hide',!ns);$('specs').textContent=`관전 ${ns}명`;$('specs').title=ns?NET.specs.join(', '):'';$('leave').classList.toggle('hide',!NET);
 }
 
 $('pc').addEventListener('click',e=>{const c=e.target.closest('.card');if(!c||!picker()||pickSent||S.phys)return;pickSent=isGuest();act({a:'pick',k:c.dataset.k},picker())});
@@ -405,55 +408,69 @@ function chatLine(name,txt,mine_){const d=document.createElement('div');if(name=
 const sys=t=>chatLine(null,t);
 function placeChat(inRoom){(inRoom?$('chatSlot'):$('chatHome')).appendChild($('chat'));$('chatHome').classList.toggle('hide',!NET)}
 function showRoom(){$('lchoose').classList.add('hide');$('room').classList.remove('hide');$('wcode').textContent=NET.code;placeChat(true);renderRoom()}
-function renderRoom(){const n=NET.names;
- $('plist').innerHTML=[1,2].map(p=>`<div class="prow${n[p]?'':' wait'}"><i class="st ${p===1?'k':'w'}"></i><span>${n[p]?esc(n[p]):'기다리는 중…'}</span>${n[p]?`<small>${p===1?'방장':'손님'}${p===NET.me?' · 나':''}</small>`:''}</div>`).join('');
- const full=!!n[2];$('startb').classList.toggle('hide',!isHost());$('startb').disabled=!full||!NET.connected;
- lmsg(isHost()?(full?'준비되면 시작하세요':'친구가 들어오면 여기에 떠요'):'방장이 시작하면 바로 시작해요')}
-function startOnline(){if(!isHost()||!NET.connected)return;NET.started=true;NET.send({t:'go'});$('lobby').classList.add('hide');placeChat(false);newGame();commit()}
-function onMsg(m){
- if(m.t==='st'&&isGuest()){const ng=!S||S.gid!==m.S.gid;S=m.S;if(ng){fx=[];floats=[];MODE=null}m.ev.forEach(playEv);
+function renderRoom(){const n=NET.names,sp=NET.specs||[];
+ $('plist').innerHTML=[1,2].map(p=>`<div class="prow${n[p]?'':' wait'}"><i class="st ${p===1?'k':'w'}"></i><span>${n[p]?esc(n[p]):'기다리는 중…'}</span>${n[p]?`<small>${p===1?'방장':'손님'}${p===NET.me?' · 나':''}</small>`:''}</div>`).join('')
+  +(sp.length?`<div class="prow spec"><i class="eye">관전</i><span>${sp.map(esc).join(', ')}</span><small>${sp.length}명${isSpec()?' · 나 포함':''}</small></div>`:'');
+ const full=!!n[2];$('startb').classList.toggle('hide',!isHost());$('startb').disabled=!full;
+ lmsg(isHost()?(full?'준비되면 시작하세요. 더 들어오는 사람은 관전자가 돼요':'친구가 들어오면 여기에 떠요'):isSpec()?'관전자로 들어왔어요. 시작하면 바로 볼 수 있어요':'방장이 시작하면 바로 시작해요');ui()}
+/* 방장: 들어온 사람들 관리. 두 번째 자리가 비어 있으면 대국자, 아니면 관전자 */
+function hostBroadcast(x,except){for(const p of NET.peers)if(p!==except)p.send(x)}
+function sendRoom(){NET.specs=NET.peers.filter(p=>p.role==='spec').map(p=>p.name);for(const p of NET.peers)p.send({t:'room',names:NET.names,specs:NET.specs,role:p.role,started:NET.started});if(!NET.started)renderRoom();else ui()}
+function addPeer(id,name,send){if(NET.peers.some(p=>p.id===id))return;const nm=String(name||'손님').slice(0,10);
+ const role=!NET.names[2]&&!NET.started?'player':'spec';const pe={id,name:nm,role,send};NET.peers.push(pe);if(role==='player')NET.names[2]=nm;
+ const t=`${nm}님이 ${role==='spec'?'관전하러 ':''}들어왔어요`;sys(t);hostBroadcast({t:'sys',txt:t},pe);sendRoom();
+ if(NET.started)pe.send({t:'st',S,ev:[]})}
+function dropPeer(pe){if(!pe||!NET.peers.includes(pe))return;NET.peers=NET.peers.filter(p=>p!==pe);const t=`${pe.name}님이 나갔어요`;sys(t);hostBroadcast({t:'sys',txt:t});
+ if(pe.role==='player'){NET.names[2]=null;
+  if(NET.started&&!S.over){NET.gone=true;hostBroadcast({t:'end',txt:t});$('lt').textContent=t;$('gone').classList.remove('hide')}
+  else{const nx=NET.peers.find(p=>p.role==='spec');if(nx&&!NET.started){nx.role='player';NET.names[2]=nx.name}}}
+ sendRoom()}
+function startOnline(){if(!isHost()||!NET.names[2])return;NET.started=true;$('lobby').classList.add('hide');placeChat(false);newGame();sendRoom();commit()}
+function onMsg(m,pe){
+ if(isHost()){if(!pe)return;
+  if(m.t==='act'&&pe.role==='player')act(m.m,2);
+  else if(m.t==='chat'){const txt=String(m.txt).slice(0,120);chatLine(pe.name,txt,false);hostBroadcast({t:'chat',name:pe.name,txt},pe)}
+  else if(m.t==='bye')dropPeer(pe);return}
+ if(m.t==='st'){const ng=!S||S.gid!==m.S.gid;S=m.S;if(ng){fx=[];floats=[];MODE=null}m.ev.forEach(playEv);
   if(S.timer&&S.timer.left!=null&&S.timer.dl)TDL=performance.now()+S.timer.left;if(!NET.started){NET.started=true;$('lobby').classList.add('hide');placeChat(false)}ui()}
- else if(m.t==='ph'&&isGuest()&&S){S.phys=S.phys||{};S.phys.B=m.B.map(([x,y,c])=>({x,y,c}));m.ev.forEach(playEv)}
- else if(m.t==='act'&&isHost())act(m.m,op(NET.me));
- else if(m.t==='room'&&isGuest()){NET.connected=true;NET.names=m.names;showRoom()}
- else if(m.t==='chat')chatLine(NET.names[op(NET.me)]||'상대',String(m.txt).slice(0,120),false);
- else if(m.t==='bye')lost();
- else if(m.t==='full'){lmsg('방이 꽉 찼어요. 다른 코드로 들어가 주세요.');$('jn').disabled=$('mk').disabled=false}}
-function lost(){if(!NET||NET.gone)return;const nm=NET.names[op(NET.me)]||'상대';
- if(isHost()&&!NET.started){NET.connected=false;NET.peer=null;NET.names[2]=null;sys(`${nm}님이 나갔어요`);renderRoom();return}
- NET.gone=true;NET.connected=false;sys(`${nm}님이 나갔어요`);$('lt').textContent=`${nm}님이 나갔어요`;$('gone').classList.remove('hide')}
+ else if(m.t==='ph'&&S){S.phys=S.phys||{};S.phys.B=m.B.map(([x,y,c])=>({x,y,c}));m.ev.forEach(playEv)}
+ else if(m.t==='room'){const first=!NET.connected;NET.connected=true;NET.names=m.names;NET.specs=m.specs;NET.me=m.role==='player'?2:0;if(!m.started){if(first||!$('room').classList.contains('hide'))showRoom()}else ui()}
+ else if(m.t==='chat')chatLine(m.name,String(m.txt).slice(0,120),false);
+ else if(m.t==='sys')sys(m.txt);
+ else if(m.t==='end'){NET.gone=true;$('lt').textContent=m.txt;$('gone').classList.remove('hide')}
+ else if(m.t==='full'){lmsg('방에 들어갈 수 없어요.');$('jn').disabled=$('mk').disabled=false}}
+function lost(){if(!NET||NET.gone||isHost())return;NET.gone=true;NET.connected=false;const t='방장이 나갔어요';sys(t);$('lt').textContent=t;$('gone').classList.remove('hide')}
 function openBC(code){try{return new BroadcastChannel(PFX+code)}catch(_){return null}}
-function onJoin(name){NET.connected=true;NET.names[2]=String(name||'손님').slice(0,10);NET.send({t:'room',names:NET.names});sys(`${NET.names[2]}님이 들어왔어요`);renderRoom()}
-function hostRoom(){const code=mkCode();NET={role:'host',me:1,connected:false,started:false,code,names:{1:getName(),2:null},send(){}};showRoom();lmsg('연결 서버에 접속하는 중…');
+function hostRoom(){const code=mkCode();NET={role:'host',me:1,connected:true,started:false,code,names:{1:getName(),2:null},specs:[],peers:[],send:x=>hostBroadcast(x)};showRoom();lmsg('연결 서버에 접속하는 중…');
  const bc=openBC(code);NET.bc=bc;
  if(bc)bc.onmessage=e=>{const m=e.data;if(m.to&&m.to!==ID)return;
-  if(m.t==='ping'){if(NET.connected&&NET.peer!==m.from||NET.started)return bc.postMessage({t:'full',to:m.from});return bc.postMessage({t:'pong',to:m.from,from:ID})}
-  if(m.t==='join'&&!NET.connected){NET.peer=m.from;NET.send=x=>bc.postMessage({...x,to:m.from,from:ID});return onJoin(m.name)}
-  if(m.from===NET.peer)onMsg(m)};
+  if(m.t==='ping')return bc.postMessage({t:'pong',to:m.from,from:ID});
+  if(m.t==='join')return addPeer('bc:'+m.from,m.name,x=>bc.postMessage({...x,to:m.from,from:ID}));
+  onMsg(m,NET.peers.find(p=>p.id==='bc:'+m.from))};
  if(!window.Peer)return lmsg('다른 기기 연결 모듈을 못 불러왔어요. 같은 브라우저 탭끼리는 가능해요.');
  const peer=new Peer(PFX+code);NET.p2p=peer;
  peer.on('open',()=>renderRoom());
  peer.on('error',err=>lmsg(err.type==='unavailable-id'?'코드가 겹쳤어요. 나갔다가 다시 만들어 주세요.':`연결 서버 오류 (${err.type}). 같은 브라우저 탭끼리는 가능해요.`));
- peer.on('connection',conn=>{conn.on('data',m=>{if(m.t==='join'){if(NET.connected||NET.started){conn.send({t:'full'});setTimeout(()=>conn.close(),500);return}
-   NET.peer=conn.peer;NET.send=x=>conn.send(x);conn.on('close',()=>{if(NET.peer===conn.peer)lost()});onJoin(m.name)}else if(NET.peer===conn.peer)onMsg(m)})})}
+ peer.on('connection',conn=>{const id='p:'+conn.peer;conn.on('data',m=>{if(m.t==='join')addPeer(id,m.name,x=>{try{conn.send(x)}catch(_){}});else onMsg(m,NET.peers.find(p=>p.id===id))});
+  conn.on('close',()=>dropPeer(NET.peers.find(p=>p.id===id)))})}
 function joinRoom(code){code=code.toUpperCase().replace(/[^A-Z0-9]/g,'');if(code.length!==4)return lmsg('코드는 4글자예요');
- NET={role:'guest',me:2,connected:false,started:false,code,names:{1:null,2:getName()},send(){}};lmsg('방 찾는 중…');$('jn').disabled=$('mk').disabled=true;
+ NET={role:'guest',me:2,connected:false,started:false,code,names:{1:null,2:getName()},specs:[],send(){}};lmsg('방 찾는 중…');$('jn').disabled=$('mk').disabled=true;
  const bc=openBC(code);let viaBC=false;
  if(bc){bc.onmessage=e=>{const m=e.data;if(m.to!==ID)return;
    if(m.t==='pong'&&!viaBC){viaBC=true;NET.send=x=>bc.postMessage({...x,from:ID});NET.send({t:'join',name:myName})}else onMsg(m)};bc.postMessage({t:'ping',from:ID})}
  setTimeout(()=>{if(viaBC)return;if(bc)bc.close();
   if(!window.Peer){$('jn').disabled=$('mk').disabled=false;return lmsg('방을 찾을 수 없어요')}
   const peer=new Peer();NET.p2p=peer;
-  peer.on('open',()=>{const conn=peer.connect(PFX+code,{reliable:true});conn.on('open',()=>{NET.send=x=>conn.send(x);NET.send({t:'join',name:myName})});conn.on('data',onMsg);conn.on('close',lost)});
+  peer.on('open',()=>{const conn=peer.connect(PFX+code,{reliable:true});conn.on('open',()=>{NET.send=x=>conn.send(x);NET.send({t:'join',name:myName})});conn.on('data',m=>onMsg(m));conn.on('close',lost)});
   peer.on('error',err=>{$('jn').disabled=$('mk').disabled=false;lmsg(err.type==='peer-unavailable'?'그런 방이 없어요. 코드를 확인해 주세요.':`연결 실패 (${err.type})`)})},500)}
-addEventListener('pagehide',()=>{try{NET&&NET.connected&&NET.send({t:'bye'})}catch(_){}});
+addEventListener('pagehide',()=>{try{if(!NET)return;if(isHost())hostBroadcast({t:'end',txt:'방장이 나갔어요'});else if(NET.connected)NET.send({t:'bye'})}catch(_){}});
 $('mk').onclick=hostRoom;
 $('jn').onclick=()=>joinRoom($('code').value);
 $('code').addEventListener('keydown',e=>{if(e.key==='Enter')joinRoom($('code').value)});
 $('solo').onclick=()=>{NET=null;$('lobby').classList.add('hide');placeChat(false);newGame();commit()};
 $('startb').onclick=startOnline;
 $('copy').onclick=async()=>{try{await navigator.clipboard.writeText(NET.code);$('copy').textContent='복사됨!'}catch(_){$('copy').textContent='직접 적어 주세요: '+NET.code}setTimeout(()=>$('copy').textContent='코드 복사',1500)};
-$('cf').addEventListener('submit',e=>{e.preventDefault();const t=$('ci').value.trim().slice(0,120);if(!t||!NET||!NET.connected)return;NET.send({t:'chat',txt:t});chatLine(NET.names[NET.me]||'나',t,true);$('ci').value=''});
+$('cf').addEventListener('submit',e=>{e.preventDefault();const t=$('ci').value.trim().slice(0,120);if(!t||!NET||!NET.connected)return;NET.send({t:'chat',name:myName,txt:t});chatLine(myName,t,true);$('ci').value=''});
 const back=()=>{location.hash='';location.reload()};
 $('leave').onclick=back;$('gback').onclick=back;$('wback').onclick=back;
 
@@ -464,7 +481,7 @@ function stone(px,py,c,a){const r=cs*.45;ctx.globalAlpha=a??1;
  if(c===1){g.addColorStop(0,'#6a6a6a');g.addColorStop(.5,'#1a1a1a');g.addColorStop(1,'#000')}else{g.addColorStop(0,'#fff');g.addColorStop(.7,'#e8e4dc');g.addColorStop(1,'#bdb7ad')}
  ctx.fillStyle=g;ctx.beginPath();ctx.arc(px,py,r,0,7);ctx.fill();ctx.globalAlpha=1}
 function draw(now){requestAnimationFrame(draw);if(!S)return;
- if(S.phys&&S.phys.owner!==undefined&&!isGuest()){stepPhys();if(S.phys&&isHost()&&NET.connected){NET.send({t:'ph',B:S.phys.B.map(b=>[+b.x.toFixed(3),+b.y.toFixed(3),b.c]),ev:EV});EV=[]}}
+ if(S.phys&&S.phys.owner!==undefined&&!isGuest()){stepPhys();if(S.phys&&isHost()&&NET.peers.length){NET.send({t:'ph',B:S.phys.B.map(b=>[+b.x.toFixed(3),+b.y.toFixed(3),b.c]),ev:EV});EV=[]}}
  if(!isGuest()&&S.timer&&S.timer.p===S.turn&&!S.over&&!S.pick&&!fall&&!S.phys){if(!S.timer.dl){S.timer.dl=now+3000;commit()}
   else if(now>=S.timer.dl){S.timer.dl=now+99999;MODE=null;const e=empties();if(e.length){const s=e[Math.random()*e.length|0];float(s.x,s.y,'시간 초과!','#f88');place(s.x,s.y);commit()}}}
  ctx.save();ctx.clearRect(0,0,size,size);if(shake>0){ctx.translate((Math.random()-.5)*shake,(Math.random()-.5)*shake);shake*=.88;if(shake<.4)shake=0}
@@ -472,7 +489,7 @@ function draw(now){requestAnimationFrame(draw);if(!S)return;
  ctx.strokeStyle='#ffffff14';ctx.lineWidth=2;for(let i=0;i<14;i++){ctx.beginPath();const y0=(i*53+17)%size;ctx.moveTo(0,y0);ctx.bezierCurveTo(size*.3,y0+18,size*.6,y0-14,size,y0+8);ctx.stroke()}
  ctx.strokeStyle='#4a2f14';ctx.lineWidth=1;ctx.beginPath();for(let i=0;i<N;i++){ctx.moveTo(off,off+i*cs);ctx.lineTo(off+(N-1)*cs,off+i*cs);ctx.moveTo(off+i*cs,off);ctx.lineTo(off+i*cs,off+(N-1)*cs)}ctx.stroke();
  ctx.fillStyle='#4a2f14';for(const a of[3,7,11])for(const b of[3,7,11]){ctx.beginPath();ctx.arc(off+a*cs,off+b*cs,cs*.1,0,7);ctx.fill()}
- for(const m of S.mines)if(m.o===VIEW()||S.over){const px=off+m.x*cs,py=off+m.y*cs;ctx.strokeStyle='#c0281c';ctx.lineWidth=2;ctx.beginPath();ctx.arc(px,py,cs*.2,0,7);ctx.moveTo(px-cs*.12,py-cs*.12);ctx.lineTo(px+cs*.12,py+cs*.12);ctx.moveTo(px+cs*.12,py-cs*.12);ctx.lineTo(px-cs*.12,py+cs*.12);ctx.stroke()}
+ for(const m of S.mines)if(m.o===VIEW()||S.over||isSpec()){const px=off+m.x*cs,py=off+m.y*cs;ctx.strokeStyle='#c0281c';ctx.lineWidth=2;ctx.beginPath();ctx.arc(px,py,cs*.2,0,7);ctx.moveTo(px-cs*.12,py-cs*.12);ctx.lineTo(px+cs*.12,py+cs*.12);ctx.moveTo(px+cs*.12,py-cs*.12);ctx.lineTo(px-cs*.12,py+cs*.12);ctx.stroke()}
  let fm=null,ft=1;if(fall){ft=Math.min(1,(now-fall.t)/550);fm={};for(const it of fall.items)fm[it.y1*N+it.x]=it.y0;if(ft>=1)fall=null}
  const e=ft*ft;let st=1;if(snapA){st=Math.min(1,(now-snapA.t)/220);if(st>=1)snapA=null}const se=1-(1-st)**3;
  for(let y=0;y<N;y++)for(let x=0;x<N;x++){const c=S.b[y][x];if(!c||hidden(c))continue;let xx=x,yy=fm&&fm[y*N+x]!==undefined?fm[y*N+x]+(y-fm[y*N+x])*e:y;
