@@ -84,6 +84,8 @@ canvas{display:block;border-radius:14px;touch-action:none;cursor:pointer}
 #wcode{font:400 clamp(56px,14vw,84px)/1 "Black Han Sans",sans-serif;letter-spacing:10px;color:var(--acc);margin:6px 0 10px}
 #lmsg{min-height:22px;margin:14px 0 0;color:var(--mut);font-size:14px}
 .hbtns{display:flex;gap:8px}
+.dg{display:flex;gap:8px;align-items:baseline;text-align:left;font-size:14px;padding:6px 2px;border-bottom:1px solid #3a2f26}.dg b{flex:none;width:44px;font-size:13px}.dg .ok{color:#8fe08f}.dg .no{color:#ff8a7a}.dg .wt{color:var(--mut)}
+.dgc{margin-top:10px;text-align:left;font-size:14px;line-height:1.5;background:#2f261f;border-radius:12px;padding:10px 12px}
 .mkrow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
 .pubh{display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-weight:700}.pubh .btn{min-height:36px;padding:4px 8px}
 #publist{display:flex;flex-direction:column;gap:6px;max-height:210px;overflow:auto}
@@ -130,6 +132,8 @@ main{grid-template-rows:auto minmax(0,1fr)}#p1{grid-column:1;grid-row:1/span 2}#
     <div class="pubh"><span>공개방</span><button class="btn ghost" id="pubr">새로고침</button></div>
     <div id="publist"></div>
     <button class="btn ghost" id="solo">한 기기에서 둘이 하기</button>
+    <button class="btn ghost" id="diagb">연결이 안 되나요? 연결 진단</button>
+    <div class="hide" id="diag"></div>
   </div>
   <div class="hide" id="room"><p style="margin:0" id="wlab">방 코드</p><div id="wcode"></div><button class="btn" id="copy">코드 복사</button>
     <div id="plist"></div><div id="chatSlot"></div>
@@ -533,6 +537,26 @@ $('jn').onclick=()=>joinRoom($('code').value);
 $('code').addEventListener('keydown',e=>{if(e.key==='Enter')joinRoom($('code').value)});
 $('solo').onclick=()=>{NET=null;$('lobby').classList.add('hide');placeChat(false);newGame();commit()};
 $('startb').onclick=startOnline;
+/* 연결 진단: 어느 단계에서 막히는지 친구 기기에서 직접 확인 */
+async function diagnose(){const box=$('diag');box.classList.remove('hide');$('diagb').disabled=true;
+ const rows=[['모듈','연결 모듈 불러오기'],['WebRTC','브라우저 직접 연결 기능'],['서버','연결 서버 접속'],['네트워크','기기끼리 직접 연결 경로']],st=rows.map(()=>['wt','확인 중…']);
+ const draw=c=>{box.innerHTML=rows.map((r,i)=>`<div class="dg"><b class="${st[i][0]}">${st[i][0]==='ok'?'정상':st[i][0]==='no'?'문제':'…'}</b><span>${r[1]}: ${esc(st[i][1])}</span></div>`).join('')+(c?`<div class="dgc">${c}</div>`:'')};draw();
+ const okPeer=!!window.Peer;st[0]=okPeer?['ok','불러옴']:['no','못 불러옴 (네트워크가 unpkg.com을 막음)'];draw();
+ const okRTC=typeof RTCPeerConnection!=='undefined';st[1]=okRTC?['ok','사용 가능']:['no','꺼져 있음 (브라우저 설정이나 확장 프로그램)'];draw();
+ let okSrv=false;if(okPeer){okSrv=await new Promise(res=>{let p;try{p=new Peer()}catch(_){return res(false)}const t=setTimeout(()=>{try{p.destroy()}catch(_){}res(false)},8000);p.on('open',()=>{clearTimeout(t);setTimeout(()=>{try{p.destroy()}catch(_){}},100);res(true)});p.on('error',e=>{clearTimeout(t);try{p.destroy()}catch(_){}res(false)})})}
+ st[2]=okSrv?['ok','접속됨']:['no',okPeer?'접속 안 됨 (0.peerjs.com이 막혀 있음)':'모듈이 없어서 확인 불가'];draw();
+ let net='none';if(okRTC){net=await new Promise(res=>{let pc;try{pc=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]})}catch(_){return res('none')}
+  let host=false,srf=false;pc.createDataChannel('x');pc.onicecandidate=e=>{if(!e.candidate)return;const c=e.candidate.candidate;if(/ typ srflx/.test(c))srf=true;if(/ typ host/.test(c))host=true};
+  pc.createOffer().then(o=>pc.setLocalDescription(o)).catch(()=>{});setTimeout(()=>{try{pc.close()}catch(_){}res(srf?'srflx':host?'host':'none')},5000)})}
+ st[3]=net==='srflx'?['ok','열려 있음']:net==='host'?['no','바깥으로 나가는 직접 연결이 막힘 (와이파이 방화벽)']:['no','직접 연결 후보가 안 나옴 (확장 프로그램·VPN이 막음)'];
+ let c;
+ if(!okPeer)c='이 네트워크가 연결 모듈을 막고 있어요. <b>폰 핫스팟</b>으로 바꿔서 다시 열어 보세요.';
+ else if(!okRTC||net==='none')c='브라우저가 직접 연결을 막고 있어요. <b>광고 차단 확장 프로그램의 WebRTC 차단</b>, Brave 보호 기능, VPN을 끄거나 <b>시크릿 창 / 다른 브라우저</b>로 열어 보세요.';
+ else if(!okSrv)c='연결 서버에 못 붙어요. 학교·회사 와이파이일 가능성이 커요. <b>폰 핫스팟</b>으로 바꿔서 해 보세요.';
+ else if(net==='host')c='와이파이가 기기끼리 직접 연결하는 걸 막고 있어요 (학교·회사·카페 와이파이에서 흔해요). <b>폰 핫스팟</b>으로 바꾸면 바로 될 거예요.';
+ else c='이 기기는 연결 조건이 다 정상이에요. 그래도 안 되면 <b>상대방 기기</b>에서도 진단을 눌러 보거나, 강력 새로고침(Ctrl+Shift+R) 후 다시 들어가 보세요.';
+ draw(c);$('diagb').disabled=false}
+$('diagb').onclick=diagnose;
 $('copy').onclick=async()=>{try{await navigator.clipboard.writeText(NET.code);$('copy').textContent='복사됨!'}catch(_){$('copy').textContent='직접 적어 주세요: '+NET.code}setTimeout(()=>$('copy').textContent='코드 복사',1500)};
 $('cf').addEventListener('submit',e=>{e.preventDefault();const t=$('ci').value.trim().slice(0,120);if(!t||!NET||!NET.connected)return;NET.send({t:'chat',name:myName,txt:t,p:NET.me});chatLine(myName,t,true,NET.me);$('ci').value=''});
 const back=()=>{location.hash='';location.reload()};
