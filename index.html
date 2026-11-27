@@ -84,6 +84,12 @@ canvas{display:block;border-radius:14px;touch-action:none;cursor:pointer}
 #wcode{font:400 clamp(56px,14vw,84px)/1 "Black Han Sans",sans-serif;letter-spacing:10px;color:var(--acc);margin:6px 0 10px}
 #lmsg{min-height:22px;margin:14px 0 0;color:var(--mut);font-size:14px}
 .hbtns{display:flex;gap:8px}
+.mkrow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+.pubh{display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-weight:700}.pubh .btn{min-height:36px;padding:4px 8px}
+#publist{display:flex;flex-direction:column;gap:6px;max-height:210px;overflow:auto}
+.pubroom{width:100%;cursor:pointer;color:var(--ink);font:inherit}.pubroom:hover{border-color:var(--acc)}.pubroom b{color:var(--acc);font:400 18px "Black Han Sans",sans-serif;min-width:34px;text-align:left}
+.pubroom .go{font-style:normal;background:var(--acc);color:#2a1a08;border-radius:8px;padding:4px 10px;font-weight:700;font-size:13px}.pubroom .go.w{background:#4a3c30;color:var(--ink)}
+.pempty{color:var(--mut);font-size:14px;padding:10px;border:1px dashed #4a3c30;border-radius:12px}
 .gotw{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
 .goth{font-size:12px;color:var(--mut);margin-bottom:6px}
 .got{display:flex;flex-wrap:wrap;gap:5px}
@@ -119,11 +125,13 @@ main{grid-template-rows:auto minmax(0,1fr)}#p1{grid-column:1;grid-row:1/span 2}#
   <h3>증강 <b>오목</b></h3><p>친구에게 방 코드를 알려주고 한 판</p>
   <div class="lcol" id="lchoose">
     <div class="jrow"><input id="nick" maxlength="10" placeholder="닉네임" autocomplete="off" aria-label="닉네임" style="letter-spacing:0;font-size:18px"></div>
-    <button class="btn big prim" id="mk">방 만들기</button>
+    <div class="mkrow"><button class="btn big prim" id="mkpub">공개방 만들기</button><button class="btn big" id="mk">비공개방 만들기</button></div>
     <div class="jrow"><input id="code" maxlength="4" placeholder="코드" autocomplete="off" aria-label="방 코드"><button class="btn big" id="jn">입장</button></div>
+    <div class="pubh"><span>공개방</span><button class="btn ghost" id="pubr">새로고침</button></div>
+    <div id="publist"></div>
     <button class="btn ghost" id="solo">한 기기에서 둘이 하기</button>
   </div>
-  <div class="hide" id="room"><p style="margin:0">방 코드</p><div id="wcode"></div><button class="btn" id="copy">코드 복사</button>
+  <div class="hide" id="room"><p style="margin:0" id="wlab">방 코드</p><div id="wcode"></div><button class="btn" id="copy">코드 복사</button>
     <div id="plist"></div><div id="chatSlot"></div>
     <div class="lcol"><button class="btn big prim" id="startb" disabled>게임 시작</button><button class="btn ghost" id="wback">나가기</button></div></div>
   <p id="lmsg"></p>
@@ -426,7 +434,8 @@ function chatLine(name,txt,mine_,p){bubble(p,txt);const d=document.createElement
  $('msgs').append(d);while($('msgs').children.length>80)$('msgs').firstChild.remove();$('msgs').scrollTop=1e9}
 const sys=t=>chatLine(null,t);
 function placeChat(inRoom){(inRoom?$('chatSlot'):$('chatHome')).appendChild($('chat'));$('chatHome').classList.toggle('hide',!NET)}
-function showRoom(){$('lchoose').classList.add('hide');$('room').classList.remove('hide');$('wcode').textContent=NET.code;placeChat(true);renderRoom()}
+const roomLabel=()=>NET.code.startsWith('pub-')?'#'+String(+NET.code.slice(4)+1).padStart(2,'0'):NET.code;
+function showRoom(){$('lchoose').classList.add('hide');$('room').classList.remove('hide');$('wcode').textContent=roomLabel();const pub=NET.code.startsWith('pub-');$('wlab').textContent=pub?'공개방':'방 코드';$('copy').classList.toggle('hide',pub);placeChat(true);renderRoom()}
 function renderRoom(){const n=NET.names,sp=NET.specs||[];
  $('plist').innerHTML=[1,2].map(p=>`<div class="prow${n[p]?'':' wait'}"><i class="st ${p===1?'k':'w'}"></i><span>${n[p]?esc(n[p]):'기다리는 중…'}</span>${n[p]?`<small>${p===1?'방장':'손님'}${p===NET.me?' · 나':''}</small>`:''}</div>`).join('')
   +(sp.length?`<div class="prow spec"><i class="eye">관전</i><span>${sp.map(esc).join(', ')}</span><small>${sp.length}명${isSpec()?' · 나 포함':''}</small></div>`:'');
@@ -457,7 +466,7 @@ function onMsg(m,pe){
  else if(m.t==='chat')chatLine(m.name,String(m.txt).slice(0,120),false,m.p);
  else if(m.t==='sys')sys(m.txt);
  else if(m.t==='end'){NET.gone=true;$('lt').textContent=m.txt;$('gone').classList.remove('hide')}
- else if(m.t==='full'){lmsg('방에 들어갈 수 없어요.');$('jn').disabled=$('mk').disabled=false}}
+ else if(m.t==='full'){lmsg('방에 들어갈 수 없어요.');$('jn').disabled=$('mk').disabled=$('mkpub').disabled=false}}
 function lost(){if(!NET||NET.gone||isHost())return;NET.gone=true;NET.connected=false;const t='방장이 나갔어요';sys(t);$('lt').textContent=t;$('gone').classList.remove('hide')}
 function openBC(code){try{return new BroadcastChannel(PFX+code)}catch(_){return null}}
 function setupBC(code){if(NET.bc)try{NET.bc.close()}catch(_){}const bc=openBC(code);NET.bc=bc;if(!bc)return;
@@ -465,23 +474,46 @@ function setupBC(code){if(NET.bc)try{NET.bc.close()}catch(_){}const bc=openBC(co
   if(m.t==='ping')return bc.postMessage({t:'pong',to:m.from,from:ID});
   if(m.t==='join')return addPeer('bc:'+m.from,m.name,x=>bc.postMessage({...x,to:m.from,from:ID}));
   onMsg(m,NET.peers.find(p=>p.id==='bc:'+m.from))}}
-function hostRoom(){NET={role:'host',me:1,connected:true,started:false,code:mkCode(),names:{1:getName(),2:null},specs:[],peers:[],send:x=>hostBroadcast(x)};
+const PUB_SLOTS=16;
+function pubInfo(){return{t:'info',code:NET.code,host:NET.names[1],n:NET.names[2]?2:1,s:NET.peers.filter(p=>p.role==='spec').length,st:NET.started&&!(S&&S.over)}}
+function hostRoom(pub){NET={role:'host',me:1,connected:true,started:false,pub:!!pub,slot:0,code:pub?'pub-0':mkCode(),names:{1:getName(),2:null},specs:[],peers:[],send:x=>hostBroadcast(x)};
  setupBC(NET.code);showRoom();
- if(!window.Peer)return lmsg('다른 기기 연결 모듈을 못 불러왔어요. 같은 브라우저 탭끼리만 가능해요.');
+ if(pub)try{const lb=new BroadcastChannel(PFX+'lobby');NET.lobby=lb;lb.onmessage=e=>{const m=e.data;if(m.t==='probe')lb.postMessage({...pubInfo(),to:m.from})}}catch(_){}
+ if(!window.Peer)return lmsg(pub?'다른 기기 연결 모듈을 못 불러왔어요. 이 공개방은 같은 브라우저 탭에서만 보여요.':'다른 기기 연결 모듈을 못 불러왔어요. 같은 브라우저 탭끼리만 가능해요.');
  lmsg('연결 서버에 접속하는 중…');let tries=0;
+ const relabel=()=>{$('wcode').textContent=roomLabel();setupBC(NET.code)};
  const start=()=>{const peer=new Peer(PFX+NET.code);NET.p2p=peer;let opened=false;
   peer.on('open',()=>{opened=true;renderRoom()});
   peer.on('disconnected',()=>{if(!NET.gone&&!peer.destroyed)setTimeout(()=>{try{peer.reconnect()}catch(_){}},400)});
   peer.on('error',err=>{
-   if(!opened&&err.type==='unavailable-id'&&++tries<6){peer.destroy();NET.code=mkCode();$('wcode').textContent=NET.code;setupBC(NET.code);return start()}
+   if(!opened&&err.type==='unavailable-id'){peer.destroy();
+    if(NET.pub){if(++NET.slot>=PUB_SLOTS)return lmsg('공개방 자리가 다 찼어요. 비공개방으로 만들어 주세요.');NET.code='pub-'+NET.slot}
+    else{if(++tries>=6)return lmsg('방을 못 만들었어요. 다시 시도해 주세요.');NET.code=mkCode()}
+    relabel();return start()}
    if(['network','server-error','socket-error','socket-closed'].includes(err.type)){lmsg('연결 서버와 끊겨서 다시 붙는 중…');setTimeout(()=>{try{if(peer.disconnected&&!peer.destroyed)peer.reconnect()}catch(_){}},1500);return}
    if(err.type!=='peer-unavailable')lmsg(`연결 서버 오류 (${err.type})`)});
-  peer.on('connection',conn=>{const id='p:'+conn.peer;conn.on('data',m=>{if(m.t==='join')addPeer(id,m.name,x=>{try{conn.send(x)}catch(_){}});else onMsg(m,NET.peers.find(p=>p.id===id))});
+  peer.on('connection',conn=>{
+   if(conn.metadata&&conn.metadata.probe){conn.on('open',()=>{try{conn.send(pubInfo())}catch(_){}setTimeout(()=>{try{conn.close()}catch(_){}},1500)});conn.on('error',()=>{});return}
+   const id='p:'+conn.peer;conn.on('data',m=>{if(m.t==='join')addPeer(id,m.name,x=>{try{conn.send(x)}catch(_){}});else onMsg(m,NET.peers.find(p=>p.id===id))});
    conn.on('close',()=>dropPeer(NET.peers.find(p=>p.id===id)));conn.on('error',()=>{})})};
  start()}
-function joinRoom(code){code=code.toUpperCase().replace(/[^A-Z0-9]/g,'');if(code.length!==4)return lmsg('코드는 4글자예요');
- NET={role:'guest',me:2,connected:false,started:false,code,names:{1:null,2:getName()},specs:[],send(){}};lmsg('방 찾는 중…');$('jn').disabled=$('mk').disabled=true;
- const bc=openBC(code);let viaBC=false;const fail=t=>{if(NET.connected)return;$('jn').disabled=$('mk').disabled=false;lmsg(t);try{NET.p2p&&NET.p2p.destroy()}catch(_){}};
+/* 공개방 목록: 같은 브라우저는 로비 채널로, 다른 기기는 공개방 자리 16개를 차례로 찔러서 찾는다 */
+let pubs=[],scanning=false;
+function renderPubs(){const L=$('publist');if(!L)return;
+ if(!pubs.length){L.innerHTML=`<div class="pempty">${scanning?'공개방 찾는 중…':'열린 공개방이 없어요. 직접 만들어 보세요!'}</div>`;return}
+ L.innerHTML=pubs.map(r=>{const watch=r.n>=2||r.st;return `<button class="prow pubroom" data-c="${esc(r.code)}"><b>#${String(+String(r.code).slice(4)+1).padStart(2,'0')}</b><span>${esc(r.host||'')}의 방</span><small>${r.n|0}/2${r.s?` · 관전 ${r.s|0}`:''} · ${r.st?'대국 중':'대기 중'}</small><i class="go${watch?' w':''}">${watch?'관전':'입장'}</i></button>`}).join('')+(scanning?'<div class="pempty">더 찾는 중…</div>':'')}
+function addPub(m){if(!m||typeof m.code!=='string'||!/^pub-\d{1,2}$/.test(m.code))return;if(NET&&isHost()&&m.code===NET.code)return;
+ pubs=pubs.filter(x=>x.code!==m.code).concat([m]).sort((a,b)=>+a.code.slice(4)-+b.code.slice(4));renderPubs()}
+function scanPub(){if(scanning||(NET&&NET.started))return;scanning=true;pubs=[];renderPubs();const me='s'+ID+Math.random();
+ try{const lb=new BroadcastChannel(PFX+'lobby');lb.onmessage=e=>{if(e.data.to===me)addPub(e.data)};lb.postMessage({t:'probe',from:me});setTimeout(()=>lb.close(),1500)}catch(_){}
+ const end=()=>{scanning=false;renderPubs()};
+ if(!window.Peer)return setTimeout(end,1500);
+ const p=new Peer();p.on('error',()=>{});
+ p.on('open',()=>{for(let i=0;i<PUB_SLOTS;i++){const c=p.connect(PFX+'pub-'+i,{metadata:{probe:1}});c.on('data',m=>{addPub(m);try{c.close()}catch(_){}});c.on('error',()=>{})}});
+ setTimeout(()=>{try{p.destroy()}catch(_){}end()},6000)}
+function joinRoom(code){if(!/^pub-\d{1,2}$/.test(code)){code=code.toUpperCase().replace(/[^A-Z0-9]/g,'');if(code.length!==4)return lmsg('코드는 4글자예요')}
+ NET={role:'guest',me:2,connected:false,started:false,code,names:{1:null,2:getName()},specs:[],send(){}};lmsg('방 찾는 중…');$('jn').disabled=$('mk').disabled=$('mkpub').disabled=true;
+ const bc=openBC(code);let viaBC=false;const fail=t=>{if(NET.connected)return;$('jn').disabled=$('mk').disabled=$('mkpub').disabled=false;lmsg(t);try{NET.p2p&&NET.p2p.destroy()}catch(_){}};
  if(bc){bc.onmessage=e=>{const m=e.data;if(m.to!==ID)return;
    if(m.t==='pong'&&!viaBC){viaBC=true;NET.send=x=>bc.postMessage({...x,from:ID});NET.send({t:'join',name:myName})}else onMsg(m)};bc.postMessage({t:'ping',from:ID})}
  setTimeout(()=>{if(viaBC)return;if(bc)bc.close();
@@ -494,7 +526,9 @@ function joinRoom(code){code=code.toUpperCase().replace(/[^A-Z0-9]/g,'');if(code
 const revive=()=>{const p=NET&&NET.p2p;if(p&&p.disconnected&&!p.destroyed&&!NET.gone)try{p.reconnect()}catch(_){}};
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)revive()});setInterval(revive,3000);
 addEventListener('pagehide',()=>{try{if(!NET)return;if(isHost())hostBroadcast({t:'end',txt:'방장이 나갔어요'});else if(NET.connected)NET.send({t:'bye'})}catch(_){}});
-$('mk').onclick=hostRoom;
+$('mk').onclick=()=>hostRoom(false);$('mkpub').onclick=()=>hostRoom(true);$('pubr').onclick=scanPub;
+$('publist').addEventListener('click',e=>{const b=e.target.closest('.pubroom');if(b&&!NET)joinRoom(b.dataset.c)});
+renderPubs();setTimeout(scanPub,300);
 $('jn').onclick=()=>joinRoom($('code').value);
 $('code').addEventListener('keydown',e=>{if(e.key==='Enter')joinRoom($('code').value)});
 $('solo').onclick=()=>{NET=null;$('lobby').classList.add('hide');placeChat(false);newGame();commit()};
