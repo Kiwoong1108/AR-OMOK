@@ -229,14 +229,18 @@ function endTurn(){const p=S.turn,q=op(p);
   if(a.length){const s=a[Math.random()*a.length|0],cc=S.b[s.y][s.x];S.b[s.y][s.x]=0;boom(s.x,s.y,'#ffcf9a',16);float(s.x,s.y,'냥!','#ffcf9a');log(`고양이가 ${NAME[cc]}돌 하나를 쳐서 떨어뜨렸다`)}}
  if(S.fog[q]>0)S.fog[q]--;if(S.shield[q]>0)S.shield[q]--;S.turn=q;startTurn()}
 /* 증강 라운드: 흑·백이 같은 등급으로 동시에 고르고, 둘 다 끝나야 게임이 이어진다 */
-const rollIds=(p,t)=>shuffle(Object.keys(AUG).filter(k=>AUG[k].t===t&&!(k==='four'&&S.four[p]))).slice(0,3);
-function openRound(){const r=Math.random(),t=r<.55?0:r<.88?1:2;S.pick={t,ids:{1:rollIds(1,t),2:rollIds(2,t)},done:{1:false,2:false},q:{1:0,2:0}};snd('pick')}
+// 이미 먹은 증강은 다시 안 나온다. 그 등급에 남은 게 3개보다 적으면 다른 등급에서 채운다
+function rollIds(p,t,noPrism){const got=(S.got&&S.got[p])||[],av=Object.keys(AUG).filter(k=>!got.includes(k)&&!(k==='four'&&S.four[p]));
+ const ids=shuffle(av.filter(k=>AUG[k].t===t)).slice(0,3);if(ids.length<3)ids.push(...shuffle(av.filter(k=>AUG[k].t!==t&&!(noPrism&&AUG[k].t===2))).slice(0,3-ids.length));return ids}
+const tierOf=(P,p)=>P.tp?P.tp[p]:P.t;
+function openRound(){const r=Math.random(),t=r<.55?0:r<.88?1:2;S.pick={t,tp:{1:t,2:t},ids:{1:rollIds(1,t),2:rollIds(2,t)},done:{1:false,2:false},q:{1:0,2:0}};for(const p of[1,2])if(!S.pick.ids[p].length)S.pick.done[p]=true;if(S.pick.done[1]&&S.pick.done[2])S.pick=null;else snd('pick')}
 function doPick(p,k){const P=S.pick;if(P.done[p]||!P.ids[p].includes(k))return;
  (S.got||(S.got={1:[],2:[]}))[p].push(k);log(`${NAME[p]}: [${AUG[k].n}] 획득`);if(AUG[k].k==='instant')instant(p,k);else S.hand[p].push(k);
  if(!S.pick||S.over)return;
- if(P.q[p]>0){P.q[p]--;P.ids[p]=rollIds(p,P.t)}else P.done[p]=true;
+ // 추가 선택(도박 중독·정 나눔)에서는 프리즘이 안 나온다
+ if(P.q[p]>0){P.q[p]--;if(!P.tp)P.tp={1:P.t,2:P.t};if(P.tp[p]===2)P.tp[p]=Math.random()<.6?0:1;P.ids[p]=rollIds(p,P.tp[p],P.t===2);if(!P.ids[p].length)P.done[p]=true}else P.done[p]=true;
  if(P.done[1]&&P.done[2])S.pick=null}
-function doReroll(p){const P=S.pick;if(P.done[p]||!S.reroll[p])return;S.reroll[p]--;P.ids[p]=rollIds(p,P.t)}
+function doReroll(p){const P=S.pick;if(P.done[p]||!S.reroll[p])return;S.reroll[p]--;P.ids[p]=rollIds(p,tierOf(P,p),tierOf(P,p)!==P.t)}
 const picker=()=>!S.pick?0:NET?(S.pick.done[NET.me]?0:NET.me):(S.pick.done[1]?2:1);
 function blast(cx,cy,p){let n=0;for(let y=cy-1;y<=cy+1;y++)for(let x=cx-1;x<=cx+1;x++){if(!inB(x,y))continue;const c=S.b[y][x];if(c&&!shielded(c)){S.b[y][x]=0;n++}S.mines=S.mines.filter(m=>m.x!==x||m.y!==y)}boom(cx,cy,'#ff8a3a',40);SH(14);return n}
 function addRandom(c,n){const e=shuffle(empties()).slice(0,n);e.forEach(s=>{S.b[s.y][s.x]=c;S.mines=S.mines.filter(m=>m.x!==s.x||m.y!==s.y);boom(s.x,s.y,'#fff3c4',10)});return e}
@@ -379,7 +383,7 @@ function ui(){if(!S)return;
  $('status').innerHTML=s;
  const pp=picker(),pk=pp?S.pick:null,key=pk?pp+JSON.stringify(pk.ids[pp])+S.reroll[pp]+S.gid:'';
  if(key!==pickKey){pickKey=key;pickSent=false;if(pk){
-  $('pt').textContent=NET?'증강 선택':`${NAME[pp]}의 증강 선택`;$('pp').textContent=`${TIER[pk.t]} 등급`;
+  $('pt').textContent=NET?'증강 선택':`${NAME[pp]}의 증강 선택`;$('pp').textContent=`${TIER[tierOf(pk,pp)]} 등급`;
   $('pc').innerHTML=pk.ids[pp].map(k=>{const a=AUG[k];return `<button class="card t${a.t}" data-k="${k}"><i class="hj t${a.t}">${a.j}</i><div><b>${a.n}</b><span>${a.d}</span></div></button>`}).join('');
   $('rr').textContent=`다시 뽑기 (${S.reroll[pp]})`;$('rr').disabled=!S.reroll[pp]}}
  $('ov').classList.toggle('hide',!pk);
